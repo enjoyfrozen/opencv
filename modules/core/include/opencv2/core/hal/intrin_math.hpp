@@ -434,6 +434,8 @@ namespace CV__SIMD_NAMESPACE {
         const v_float32 v_coscof_p0 = vx_setall_f32(2.443315711809948E-5f);
         const v_float32 v_coscof_p1 = vx_setall_f32(-1.388731625493765E-3f);
         const v_float32 v_coscof_p2 = vx_setall_f32(4.166664568298827E-2f);
+        const v_float32 v_nan = v_reinterpret_as_f32(vx_setall_s32(0x7fc00000));
+        const v_float32 v_neg_zero = vx_setall_f32(-0.f);
 
         v_float32 _vx, _vy, sign_mask_sin, sign_mask_cos;
         v_int32 emm2;
@@ -461,23 +463,24 @@ namespace CV__SIMD_NAMESPACE {
 
         y1 = v_fma(v_coscof_p0, _vxx, v_coscof_p1);
         y1 = v_fma(y1, _vxx, v_coscof_p2);
-//        y1 = v_fma(y1, _vxx, vx_setall_f32(-0.5f));
-//        y1 = v_fma(y1, _vxx, vx_setall_f32(1));
-        y1 = v_mul(y1, _vxx);
+        y1 = v_fma(y1, _vxx, vx_setall_f32(-0.5f));
         y1 = v_fma(y1, _vxx, vx_setall_f32(1));
-        y1 = v_fma(vx_setall_f32(-0.5f), _vxx, y1);
 
         y2 = v_fma(v_sincof_p0, _vxx, v_sincof_p1);
         y2 = v_fma(y2, _vxx, v_sincof_p2);
         y2 = v_mul(y2, _vxx);
         y2 = v_fma(y2, _vx, _vx);
 
+        // sincos(NAN) -> NAN, sincos(±INF) -> NAN
+        v_float32 mask_not_nan = v_not_nan(x);
+        v_float32 mask_inf = v_eq(_vx, v_reinterpret_as_f32(vx_setall_s32(0x7f800000)));
+        y1 = v_select(mask_not_nan, y1, v_nan);
+        y1 = v_select(mask_inf, v_nan, y1);
+
         ysin = v_select(poly_mask, y2, y1);
         ycos = v_select(poly_mask, y1, y2);
-        ysin = v_select(sign_mask_sin, ysin, v_xor(vx_setall_f32(-0.f), ysin));
-        ycos = v_select(sign_mask_cos, v_xor(vx_setall_f32(-0.f), ycos), ycos);
-
-        // sin/cos(NAN) -> NAN, sin/cos(INF) -> NAN
+        ysin = v_select(sign_mask_sin, ysin, v_xor(v_neg_zero, ysin));
+        ycos = v_select(sign_mask_cos, v_xor(v_neg_zero, ycos), ycos);
     }
 
 #ifndef OPENCV_HAL_MATH_HAVE_SIN

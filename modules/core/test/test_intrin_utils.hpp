@@ -1912,7 +1912,7 @@ template<typename R> struct TheTest
         // Test special values
         std::vector<LaneType> specialValues = {0, (LaneType) M_PI, (LaneType) (M_PI / 2), INFINITY, -INFINITY, NAN};
         const int testRandNum = 10000;
-        const double specialValueProbability = 1; // 10% chance to insert a special value
+        const double specialValueProbability = 0.1; // 10% chance to insert a special value
         cv::RNG_MT19937 rng;
 
         for (int i = 0; i < testRandNum; i++) {
@@ -1940,6 +1940,10 @@ template<typename R> struct TheTest
                 if (std::isnan(dataRand[j]) || std::isinf(dataRand[j])) {
                     EXPECT_TRUE(std::isnan(resSin[j]));
                     EXPECT_TRUE(std::isnan(resCos[j]));
+                } else if(dataRand[j] == 0) {
+                    // input 0 -> output 0
+                    EXPECT_EQ(resSin[j], 0);
+                    EXPECT_EQ(resCos[j], 1);
                 } else {
                     EXPECT_LT(std::abs(resSin[j] - std_sin), diff_thr * (std::abs(std_sin) + flt_min * 100));
                     EXPECT_LT(std::abs(resCos[j] - std_cos), diff_thr * (std::abs(std_cos) + flt_min * 100));
@@ -1948,7 +1952,7 @@ template<typename R> struct TheTest
         }
     }
 
-    TheTest &test_sin_fp32() {
+    TheTest &test_sincos_fp32() {
         __test_sincos(1e-6f, FLT_MIN);
         return *this;
     }
@@ -2268,7 +2272,7 @@ void test_hal_intrin_float32()
         .test_exp_fp32()
         .test_log_fp32()
         .test_erf_fp32()
-        .test_sin_fp32()
+        .test_sincos_fp32()
 #if CV_SIMD_WIDTH == 32
         .test_extract<4>().test_extract<5>().test_extract<6>().test_extract<7>()
         .test_rotate<4>().test_rotate<5>().test_rotate<6>().test_rotate<7>()
