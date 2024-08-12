@@ -1956,6 +1956,11 @@ template<typename R> struct TheTest
         __test_sincos(1e-6f, FLT_MIN);
         return *this;
     }
+
+    TheTest &test_sincos_fp64() {
+        __test_sincos(1e-11, DBL_MIN);
+        return *this;
+    }
 };
 
 #define DUMP_ENTRY(type) printf("SIMD%d: %s\n", 8*VTraits<v_uint8>::vlanes(), CV__TRACE_FUNCTION);
@@ -2271,8 +2276,8 @@ void test_hal_intrin_float32()
         .test_pack_triplets()
         .test_exp_fp32()
         .test_log_fp32()
-        .test_erf_fp32()
         .test_sincos_fp32()
+        .test_erf_fp32()
 #if CV_SIMD_WIDTH == 32
         .test_extract<4>().test_extract<5>().test_extract<6>().test_extract<7>()
         .test_rotate<4>().test_rotate<5>().test_rotate<6>().test_rotate<7>()
@@ -2306,6 +2311,7 @@ void test_hal_intrin_float64()
         .test_extract_highest()
         .test_exp_fp64()
         .test_log_fp64()
+        .test_sincos_fp64()
         //.test_broadcast_element<0>().test_broadcast_element<1>()
 #if CV_SIMD_WIDTH == 32
         .test_extract<2>().test_extract<3>()

@@ -417,6 +417,7 @@ namespace CV__SIMD_NAMESPACE {
 
 #define OPENCV_HAL_MATH_HAVE_LOG 1
 //! @}
+#endif
 
 #if !defined(OPENCV_HAL_MATH_HAVE_SIN) || !defined(OPENCV_HAL_MATH_HAVE_COS)
 
@@ -471,17 +472,93 @@ namespace CV__SIMD_NAMESPACE {
         y2 = v_mul(y2, _vxx);
         y2 = v_fma(y2, _vx, _vx);
 
+        ysin = v_select(poly_mask, y2, y1);
+        ycos = v_select(poly_mask, y1, y2);
+        ysin = v_select(sign_mask_sin, ysin, v_xor(v_neg_zero, ysin));
+        ycos = v_select(sign_mask_cos, v_xor(v_neg_zero, ycos), ycos);
+
         // sincos(NAN) -> NAN, sincos(±INF) -> NAN
-        v_float32 mask_not_nan = v_not_nan(x);
         v_float32 mask_inf = v_eq(_vx, v_reinterpret_as_f32(vx_setall_s32(0x7f800000)));
-        y1 = v_select(mask_not_nan, y1, v_nan);
-        y1 = v_select(mask_inf, v_nan, y1);
+        v_float32 mask_nan = v_or(mask_inf, v_ne(x, x));
+        ysin = v_select(mask_nan, v_nan, ysin);
+        ycos = v_select(mask_nan, v_nan, ycos);
+    }
+
+#if CV_SIMD_64F || CV_SIMD_SCALABLE_64F
+    inline void v_sincos(const v_float64 &x, v_float64 &ysin, v_float64 &ycos) {
+        const v_float64 v_cephes_FOPI = vx_setall_f64(1.2732395447351626861510701069801148); // 4 / M_PI
+        const v_float64 v_minus_DP1 = vx_setall_f64(-7.853981554508209228515625E-1);
+        const v_float64 v_minus_DP2 = vx_setall_f64(-7.94662735614792836714E-9);
+        const v_float64 v_minus_DP3 = vx_setall_f64(-3.06161699786838294307E-17);
+        const v_float64 v_sin_C1 = vx_setall_f64(1.58962301576546568060E-10);
+        const v_float64 v_sin_C2 = vx_setall_f64(-2.50507477628578072866E-8);
+        const v_float64 v_sin_C3 = vx_setall_f64(2.75573136213857245213E-6);
+        const v_float64 v_sin_C4 = vx_setall_f64(-1.98412698295895385996E-4);
+        const v_float64 v_sin_C5 = vx_setall_f64(8.33333333332211858878E-3);
+        const v_float64 v_sin_C6 = vx_setall_f64(-1.66666666666666307295E-1);
+        const v_float64 v_cos_C1 = vx_setall_f64(-1.13585365213876817300E-11);
+        const v_float64 v_cos_C2 = vx_setall_f64(2.08757008419747316778E-9);
+        const v_float64 v_cos_C3 = vx_setall_f64(-2.75573141792967388112E-7);
+        const v_float64 v_cos_C4 = vx_setall_f64(2.48015872888517045348E-5);
+        const v_float64 v_cos_C5 = vx_setall_f64(-1.38888888888730564116E-3);
+        const v_float64 v_cos_C6 = vx_setall_f64(4.16666666666665929218E-2);
+        const v_float64 v_nan = v_reinterpret_as_f64(vx_setall_s64(0x7ff8000000000000));
+        const v_float64 v_neg_zero = vx_setall_f64(-0.0);
+
+        v_float64 _vx, _vy, sign_mask_sin, sign_mask_cos;
+        v_int64 emm2;
+
+        sign_mask_sin = v_lt(x, vx_setzero_f64());
+        _vx = v_abs(x);
+        _vy = v_mul(_vx, v_cephes_FOPI);
+
+        emm2 = v_expand_low(v_trunc(_vy));
+        emm2 = v_add(emm2, vx_setall_s64(1));
+        emm2 = v_and(emm2, vx_setall_s64(~1));
+        _vy = v_cvt_f64(emm2);
+
+        v_float64 poly_mask = v_reinterpret_as_f64(v_eq(v_and(emm2, vx_setall_s64(2)), vx_setall_s64(0)));
+
+        _vx = v_fma(_vy, v_minus_DP1, _vx);
+        _vx = v_fma(_vy, v_minus_DP2, _vx);
+        _vx = v_fma(_vy, v_minus_DP3, _vx);
+
+        sign_mask_sin = v_xor(sign_mask_sin, v_cvt_f64(v_eq(v_and(emm2, vx_setall_s64(4)), vx_setall_s64(0))));
+        sign_mask_cos = v_cvt_f64(v_eq(v_and(v_sub(emm2, vx_setall_s64(2)), vx_setall_s64(4)), vx_setall_s64(0)));
+
+        v_float64 _vxx = v_mul(_vx, _vx);
+        v_float64 y1, y2;
+
+        y1 = v_fma(v_cos_C1, _vxx, v_cos_C2);
+        y1 = v_fma(y1, _vxx, v_cos_C3);
+        y1 = v_fma(y1, _vxx, v_cos_C4);
+        y1 = v_fma(y1, _vxx, v_cos_C5);
+        y1 = v_fma(y1, _vxx, v_cos_C6);
+        y1 = v_fma(y1, _vxx, vx_setall_f64(-0.5));
+        y1 = v_fma(y1, _vxx, vx_setall_f64(1.0));
+
+        y2 = v_fma(v_sin_C1, _vxx, v_sin_C2);
+        y2 = v_fma(y2, _vxx, v_sin_C3);
+        y2 = v_fma(y2, _vxx, v_sin_C4);
+        y2 = v_fma(y2, _vxx, v_sin_C5);
+        y2 = v_fma(y2, _vxx, v_sin_C6);
+        y2 = v_mul(y2, _vxx);
+        y2 = v_fma(y2, _vx, _vx);
 
         ysin = v_select(poly_mask, y2, y1);
         ycos = v_select(poly_mask, y1, y2);
         ysin = v_select(sign_mask_sin, ysin, v_xor(v_neg_zero, ysin));
         ycos = v_select(sign_mask_cos, v_xor(v_neg_zero, ycos), ycos);
+
+        // sincos(NAN) -> NAN, sincos(±INF) -> NAN
+        v_float64 mask_inf = v_eq(_vx, v_reinterpret_as_f64(vx_setall_s64(0x7ff0000000000000)));
+        v_float64 mask_nan = v_or(mask_inf, v_ne(x, x));
+        ysin = v_select(mask_nan, v_nan, ysin);
+        ycos = v_select(mask_nan, v_nan, ycos);
     }
+#endif // CV_SIMD_64F || CV_SIMD_SCALABLE_64F
+//! @}
+#endif // OPENCV_HAL_MATH_HAVE_SIN && OPENCV_HAL_MATH_HAVE_COS
 
 #ifndef OPENCV_HAL_MATH_HAVE_SIN
     inline v_float32 v_sin(const v_float32 &x)
@@ -490,6 +567,15 @@ namespace CV__SIMD_NAMESPACE {
         v_sincos(x, ysin, ycos);
         return ysin;
     }
+
+#if CV_SIMD_64F || CV_SIMD_SCALABLE_64F
+    inline v_float64 v_sin(const v_float64 &x)
+    {
+        v_float64 ysin, ycos;
+        v_sincos(x, ysin, ycos);
+        return ysin;
+    }
+#endif // CV_SIMD_64F || CV_SIMD_SCALABLE_64F
 
 #define OPENCV_HAL_MATH_HAVE_SIN 1
 #endif // OPENCV_HAL_MATH_HAVE_SIN
@@ -502,12 +588,17 @@ namespace CV__SIMD_NAMESPACE {
         return ycos;
     }
 
+#if CV_SIMD_64F || CV_SIMD_SCALABLE_64F
+    inline v_float64 v_cos(const v_float64 &x)
+    {
+        v_float64 ysin, ycos;
+        v_sincos(x, ysin, ycos);
+        return ycos;
+    }
+#endif // CV_SIMD_64F || CV_SIMD_SCALABLE_64F
+
 #define OPENCV_HAL_MATH_HAVE_COS 1
 #endif // OPENCV_HAL_MATH_HAVE_COS
-//! @}
-#endif // OPENCV_HAL_MATH_HAVE_SIN && OPENCV_HAL_MATH_HAVE_COS
-
-#endif
 
 /* This implementation is derived from the approximation approach of Error Function (Erf) from PyTorch
    https://github.com/pytorch/pytorch/blob/9c50ecc84b9a6e699a7f058891b889aafbf976c7/aten/src/ATen/cpu/vec/vec512/vec512_float.h#L189-L220
