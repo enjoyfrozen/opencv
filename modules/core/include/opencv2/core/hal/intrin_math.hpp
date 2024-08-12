@@ -417,6 +417,93 @@ namespace CV__SIMD_NAMESPACE {
 
 #define OPENCV_HAL_MATH_HAVE_LOG 1
 //! @}
+
+#if !defined(OPENCV_HAL_MATH_HAVE_SIN) || !defined(OPENCV_HAL_MATH_HAVE_COS)
+
+//! @name Sine and Cosine
+//! @{
+    inline void v_sincos(const v_float32 &x, v_float32 &ysin, v_float32 &ycos)
+    {
+        const v_float32 v_cephes_FOPI = vx_setall_f32(1.27323954473516f); // 4 / M_PI
+        const v_float32 v_minus_DP1 = vx_setall_f32(-0.78515625f);
+        const v_float32 v_minus_DP2 = vx_setall_f32(-2.4187564849853515625E-4f);
+        const v_float32 v_minus_DP3 = vx_setall_f32(-3.77489497744594108E-8f);
+        const v_float32 v_sincof_p0 = vx_setall_f32(-1.9515295891E-4f);
+        const v_float32 v_sincof_p1 = vx_setall_f32(8.3321608736E-3f);
+        const v_float32 v_sincof_p2 = vx_setall_f32(-1.6666654611E-1f);
+        const v_float32 v_coscof_p0 = vx_setall_f32(2.443315711809948E-5f);
+        const v_float32 v_coscof_p1 = vx_setall_f32(-1.388731625493765E-3f);
+        const v_float32 v_coscof_p2 = vx_setall_f32(4.166664568298827E-2f);
+
+        v_float32 _vx, _vy, sign_mask_sin, sign_mask_cos;
+        v_int32 emm2;
+
+        sign_mask_sin = v_lt(x, vx_setzero_f32());
+        _vx = v_abs(x);
+        _vy = v_mul(_vx, v_cephes_FOPI);
+
+        emm2 = v_trunc(_vy);
+        emm2 = v_add(emm2, vx_setall_s32(1));
+        emm2 = v_and(emm2, vx_setall_s32(~1));
+        _vy = v_cvt_f32(emm2);
+
+        v_float32 poly_mask = v_reinterpret_as_f32(v_eq(v_and(emm2, vx_setall_s32(2)), vx_setall_s32(0)));
+
+        _vx = v_fma(_vy, v_minus_DP1, _vx);
+        _vx = v_fma(_vy, v_minus_DP2, _vx);
+        _vx = v_fma(_vy, v_minus_DP3, _vx);
+
+        sign_mask_sin = v_xor(sign_mask_sin, v_cvt_f32(v_eq(v_and(emm2, vx_setall_s32(4)), vx_setall_s32(0))));
+        sign_mask_cos = v_cvt_f32(v_eq(v_and(v_sub(emm2, vx_setall_s32(2)), vx_setall_s32(4)), vx_setall_s32(0)));
+
+        v_float32 _vxx = v_mul(_vx, _vx);
+        v_float32 y1, y2;
+
+        y1 = v_fma(v_coscof_p0, _vxx, v_coscof_p1);
+        y1 = v_fma(y1, _vxx, v_coscof_p2);
+//        y1 = v_fma(y1, _vxx, vx_setall_f32(-0.5f));
+//        y1 = v_fma(y1, _vxx, vx_setall_f32(1));
+        y1 = v_mul(y1, _vxx);
+        y1 = v_fma(y1, _vxx, vx_setall_f32(1));
+        y1 = v_fma(vx_setall_f32(-0.5f), _vxx, y1);
+
+        y2 = v_fma(v_sincof_p0, _vxx, v_sincof_p1);
+        y2 = v_fma(y2, _vxx, v_sincof_p2);
+        y2 = v_mul(y2, _vxx);
+        y2 = v_fma(y2, _vx, _vx);
+
+        ysin = v_select(poly_mask, y2, y1);
+        ycos = v_select(poly_mask, y1, y2);
+        ysin = v_select(sign_mask_sin, ysin, v_xor(v_setall_f32(-0.f), ysin));
+        ycos = v_select(sign_mask_cos, v_xor(v_setall_f32(-0.f), ycos), ycos);
+
+        // sin/cos(NAN) -> NAN, sin/cos(INF) -> NAN
+    }
+
+#ifndef OPENCV_HAL_MATH_HAVE_SIN
+    inline v_float32 v_sin(const v_float32 &x)
+    {
+        v_float32 ysin, ycos;
+        v_sincos(x, ysin, ycos);
+        return ysin;
+    }
+
+#define OPENCV_HAL_MATH_HAVE_SIN 1
+#endif // OPENCV_HAL_MATH_HAVE_SIN
+
+#ifndef OPENCV_HAL_MATH_HAVE_COS
+    inline v_float32 v_cos(const v_float32 &x)
+    {
+        v_float32 ysin, ycos;
+        v_sincos(x, ysin, ycos);
+        return ycos;
+    }
+
+#define OPENCV_HAL_MATH_HAVE_COS 1
+#endif // OPENCV_HAL_MATH_HAVE_COS
+//! @}
+#endif // OPENCV_HAL_MATH_HAVE_SIN && OPENCV_HAL_MATH_HAVE_COS
+
 #endif
 
 /* This implementation is derived from the approximation approach of Error Function (Erf) from PyTorch

@@ -1906,6 +1906,52 @@ template<typename R> struct TheTest
 
         return *this;
     }
+
+    void __test_sincos(LaneType diff_thr, LaneType flt_min) {
+        int n = VTraits<R>::vlanes();
+        // Test special values
+        std::vector<LaneType> specialValues = {0, (LaneType) M_PI, (LaneType) (M_PI / 2), INFINITY, -INFINITY, NAN};
+        const int testRandNum = 10000;
+        const double specialValueProbability = 1; // 10% chance to insert a special value
+        cv::RNG_MT19937 rng;
+
+        for (int i = 0; i < testRandNum; i++) {
+            Data<R> dataRand, resSin, resCos;
+            for (int j = 0; j < n; ++j) {
+                if (rng.uniform(0.f, 1.f) <= specialValueProbability) {
+                    // Insert a special value
+                    int specialValueIndex = rng.uniform(0, (int) specialValues.size());
+                    dataRand[j] = specialValues[specialValueIndex];
+                } else {
+                    // Generate uniform random data in [-2*PI, 2*PI]
+                    dataRand[j] = (LaneType) rng.uniform(-2 * M_PI, 2 * M_PI);
+                }
+            }
+
+            // Compare with std::sin and std::cos
+            R x = dataRand;
+            resSin = v_sin(x);
+            resCos = v_cos(x);
+            for (int j = 0; j < n; ++j) {
+                SCOPED_TRACE(cv::format("Random test value: %f", dataRand[j]));
+                LaneType std_sin = std::sin(dataRand[j]);
+                LaneType std_cos = std::cos(dataRand[j]);
+                // input NaN, +INF, -INF -> output NaN
+                if (std::isnan(dataRand[j]) || std::isinf(dataRand[j])) {
+                    EXPECT_TRUE(std::isnan(resSin[j]));
+                    EXPECT_TRUE(std::isnan(resCos[j]));
+                } else {
+                    EXPECT_LT(std::abs(resSin[j] - std_sin), diff_thr * (std::abs(std_sin) + flt_min * 100));
+                    EXPECT_LT(std::abs(resCos[j] - std_cos), diff_thr * (std::abs(std_cos) + flt_min * 100));
+                }
+            }
+        }
+    }
+
+    TheTest &test_sin_fp32() {
+        __test_sincos(1e-6f, FLT_MIN);
+        return *this;
+    }
 };
 
 #define DUMP_ENTRY(type) printf("SIMD%d: %s\n", 8*VTraits<v_uint8>::vlanes(), CV__TRACE_FUNCTION);
@@ -2222,6 +2268,7 @@ void test_hal_intrin_float32()
         .test_exp_fp32()
         .test_log_fp32()
         .test_erf_fp32()
+        .test_sin_fp32()
 #if CV_SIMD_WIDTH == 32
         .test_extract<4>().test_extract<5>().test_extract<6>().test_extract<7>()
         .test_rotate<4>().test_rotate<5>().test_rotate<6>().test_rotate<7>()
