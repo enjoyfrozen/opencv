@@ -474,8 +474,8 @@ namespace CV__SIMD_NAMESPACE {
 
         ysin = v_select(poly_mask, y2, y1);
         ycos = v_select(poly_mask, y1, y2);
-        ysin = v_select(sign_mask_sin, ysin, v_xor(v_setall_f32(-0.f), ysin));
-        ycos = v_select(sign_mask_cos, v_xor(v_setall_f32(-0.f), ycos), ycos);
+        ysin = v_select(sign_mask_sin, ysin, v_xor(vx_setall_f32(-0.f), ysin));
+        ycos = v_select(sign_mask_cos, v_xor(vx_setall_f32(-0.f), ycos), ycos);
 
         // sin/cos(NAN) -> NAN, sin/cos(INF) -> NAN
     }
