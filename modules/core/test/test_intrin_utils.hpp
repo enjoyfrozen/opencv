@@ -1941,7 +1941,7 @@ template<typename R> struct TheTest
                     EXPECT_TRUE(std::isnan(resSin[j]));
                     EXPECT_TRUE(std::isnan(resCos[j]));
                 } else if(dataRand[j] == 0) {
-                    // input 0 -> output 0
+                    // sin(0) -> 0, cos(0) -> 1
                     EXPECT_EQ(resSin[j], 0);
                     EXPECT_EQ(resCos[j], 1);
                 } else {

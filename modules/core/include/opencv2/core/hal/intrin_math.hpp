@@ -456,8 +456,8 @@ namespace CV__SIMD_NAMESPACE {
         _vx = v_fma(_vy, v_minus_DP2, _vx);
         _vx = v_fma(_vy, v_minus_DP3, _vx);
 
-        sign_mask_sin = v_xor(sign_mask_sin, v_cvt_f32(v_eq(v_and(emm2, vx_setall_s32(4)), vx_setall_s32(0))));
-        sign_mask_cos = v_cvt_f32(v_eq(v_and(v_sub(emm2, vx_setall_s32(2)), vx_setall_s32(4)), vx_setall_s32(0)));
+        sign_mask_sin = v_xor(sign_mask_sin, v_reinterpret_as_f32(v_eq(v_and(emm2, vx_setall_s32(4)), vx_setall_s32(0))));
+        sign_mask_cos = v_reinterpret_as_f32(v_eq(v_and(v_sub(emm2, vx_setall_s32(2)), vx_setall_s32(4)), vx_setall_s32(0)));
 
         v_float32 _vxx = v_mul(_vx, _vx);
         v_float32 y1, y2;
@@ -523,8 +523,8 @@ namespace CV__SIMD_NAMESPACE {
         _vx = v_fma(_vy, v_minus_DP2, _vx);
         _vx = v_fma(_vy, v_minus_DP3, _vx);
 
-        sign_mask_sin = v_xor(sign_mask_sin, v_cvt_f64(v_eq(v_and(emm2, vx_setall_s64(4)), vx_setall_s64(0))));
-        sign_mask_cos = v_cvt_f64(v_eq(v_and(v_sub(emm2, vx_setall_s64(2)), vx_setall_s64(4)), vx_setall_s64(0)));
+        sign_mask_sin = v_xor(sign_mask_sin, v_reinterpret_as_f64(v_eq(v_and(emm2, vx_setall_s64(4)), vx_setall_s64(0))));
+        sign_mask_cos = v_reinterpret_as_f64(v_eq(v_and(v_sub(emm2, vx_setall_s64(2)), vx_setall_s64(4)), vx_setall_s64(0)));
 
         v_float64 _vxx = v_mul(_vx, _vx);
         v_float64 y1, y2;
