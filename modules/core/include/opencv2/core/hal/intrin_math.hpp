@@ -423,6 +423,68 @@ namespace CV__SIMD_NAMESPACE {
 
 //! @name Sine and Cosine
 //! @{
+#if defined(CV_SIMD_FP16) && CV_SIMD_FP16
+    inline void v_sincos(const v_float16 &x, v_float16 &ysin, v_float16 &ycos) {
+        const v_float16 v_cephes_FOPI = vx_setall_f16(hfloat(1.27323954473516f)); // 4 / M_PI
+        const v_float16 v_minus_DP1 = vx_setall_f16(hfloat(-0.78515625f));
+        const v_float16 v_minus_DP2 = vx_setall_f16(hfloat(-2.4187564849853515625E-4f));
+        const v_float16 v_minus_DP3 = vx_setall_f16(hfloat(-3.77489497744594108E-8f));
+        const v_float16 v_sincof_p0 = vx_setall_f16(hfloat(-1.9515295891E-4f));
+        const v_float16 v_sincof_p1 = vx_setall_f16(hfloat(8.3321608736E-3f));
+        const v_float16 v_sincof_p2 = vx_setall_f16(hfloat(-1.6666654611E-1f));
+        const v_float16 v_coscof_p0 = vx_setall_f16(hfloat(2.443315711809948E-5f));
+        const v_float16 v_coscof_p1 = vx_setall_f16(hfloat(-1.388731625493765E-3f));
+        const v_float16 v_coscof_p2 = vx_setall_f16(hfloat(4.166664568298827E-2f));
+        const v_float16 v_nan = v_reinterpret_as_f16(vx_setall_s16(0x7e00));
+        const v_float16 v_neg_zero = vx_setall_f16(hfloat(-0.f));
+
+        v_float16 _vx, _vy, sign_mask_sin, sign_mask_cos;
+        v_int16 emm2;
+
+        sign_mask_sin = v_lt(x, vx_setzero_f16());
+        _vx = v_abs(x);
+        _vy = v_mul(_vx, v_cephes_FOPI);
+
+        emm2 = v_trunc(_vy);
+        emm2 = v_add(emm2, vx_setall_s16(1));
+        emm2 = v_and(emm2, vx_setall_s16(~1));
+        _vy = v_cvt_f16(emm2);
+
+        v_float16 poly_mask = v_reinterpret_as_f16(v_eq(v_and(emm2, vx_setall_s16(2)), vx_setall_s16(0)));
+
+        _vx = v_fma(_vy, v_minus_DP1, _vx);
+        _vx = v_fma(_vy, v_minus_DP2, _vx);
+        _vx = v_fma(_vy, v_minus_DP3, _vx);
+
+        sign_mask_sin = v_xor(sign_mask_sin, v_reinterpret_as_f16(v_eq(v_and(emm2, vx_setall_s16(4)), vx_setall_s16(0))));
+        sign_mask_cos = v_reinterpret_as_f16(v_eq(v_and(v_sub(emm2, vx_setall_s16(2)), vx_setall_s16(4)), vx_setall_s16(0)));
+
+        v_float16 _vxx = v_mul(_vx, _vx);
+        v_float16 y1, y2;
+
+        y1 = v_fma(v_coscof_p0, _vxx, v_coscof_p1);
+        y1 = v_fma(y1, _vxx, v_coscof_p2);
+        y1 = v_fma(y1, _vxx, vx_setall_f16(hfloat(-0.5f)));
+        y1 = v_fma(y1, _vxx, vx_setall_f16(hfloat(1)));
+
+        y2 = v_fma(v_sincof_p0, _vxx, v_sincof_p1);
+        y2 = v_fma(y2, _vxx, v_sincof_p2);
+        y2 = v_mul(y2, _vxx);
+        y2 = v_fma(y2, _vx, _vx);
+
+        ysin = v_select(poly_mask, y2, y1);
+        ycos = v_select(poly_mask, y1, y2);
+        ysin = v_select(sign_mask_sin, ysin, v_xor(v_neg_zero, ysin));
+        ycos = v_select(sign_mask_cos, v_xor(v_neg_zero, ycos), ycos);
+
+        // sincos(NAN) -> NAN, sincos(±INF) -> NAN
+        v_float16 mask_inf = v_eq(_vx, v_reinterpret_as_f16(vx_setall_s16(0x7c00)));
+        v_float16 mask_nan = v_or(mask_inf, v_ne(x, x));
+        ysin = v_select(mask_nan, v_nan, ysin);
+        ycos = v_select(mask_nan, v_nan, ycos);
+    }
+#endif // CV_SIMD_FP16
+
     inline void v_sincos(const v_float32 &x, v_float32 &ysin, v_float32 &ycos)
     {
         const v_float32 v_cephes_FOPI = vx_setall_f32(1.27323954473516f); // 4 / M_PI
@@ -561,6 +623,15 @@ namespace CV__SIMD_NAMESPACE {
 #endif // OPENCV_HAL_MATH_HAVE_SIN && OPENCV_HAL_MATH_HAVE_COS
 
 #ifndef OPENCV_HAL_MATH_HAVE_SIN
+#if defined(CV_SIMD_FP16) && CV_SIMD_FP16
+    inline v_float16 v_sin(const v_float16 &x)
+    {
+        v_float16 ysin, ycos;
+        v_sincos(x, ysin, ycos);
+        return ysin;
+    }
+#endif // CV_SIMD_FP16
+
     inline v_float32 v_sin(const v_float32 &x)
     {
         v_float32 ysin, ycos;
@@ -581,6 +652,16 @@ namespace CV__SIMD_NAMESPACE {
 #endif // OPENCV_HAL_MATH_HAVE_SIN
 
 #ifndef OPENCV_HAL_MATH_HAVE_COS
+
+#if defined(CV_SIMD_FP16) && CV_SIMD_FP16
+    inline v_float16 v_cos(const v_float16 &x)
+    {
+        v_float16 ysin, ycos;
+        v_sincos(x, ysin, ycos);
+        return ycos;
+    }
+#endif // CV_SIMD_FP16
+
     inline v_float32 v_cos(const v_float32 &x)
     {
         v_float32 ysin, ycos;

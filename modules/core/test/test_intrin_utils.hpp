@@ -1910,7 +1910,7 @@ template<typename R> struct TheTest
     void __test_sincos(LaneType diff_thr, LaneType flt_min) {
         int n = VTraits<R>::vlanes();
         // Test special values
-        std::vector<LaneType> specialValues = {0, (LaneType) M_PI, (LaneType) (M_PI / 2), INFINITY, -INFINITY, NAN};
+        std::vector<LaneType> specialValues = {(LaneType) 0, (LaneType) M_PI, (LaneType) (M_PI / 2), (LaneType) INFINITY, (LaneType) -INFINITY, (LaneType) NAN};
         const int testRandNum = 10000;
         const double specialValueProbability = 0.1; // 10% chance to insert a special value
         cv::RNG_MT19937 rng;
@@ -1934,8 +1934,8 @@ template<typename R> struct TheTest
             resCos = v_cos(x);
             for (int j = 0; j < n; ++j) {
                 SCOPED_TRACE(cv::format("Random test value: %f", dataRand[j]));
-                LaneType std_sin = std::sin(dataRand[j]);
-                LaneType std_cos = std::cos(dataRand[j]);
+                LaneType std_sin = (LaneType) std::sin(dataRand[j]);
+                LaneType std_cos = (LaneType) std::cos(dataRand[j]);
                 // input NaN, +INF, -INF -> output NaN
                 if (std::isnan(dataRand[j]) || std::isinf(dataRand[j])) {
                     EXPECT_TRUE(std::isnan(resSin[j]));
@@ -1952,13 +1952,25 @@ template<typename R> struct TheTest
         }
     }
 
+    TheTest &test_sincos_fp16() {
+#if CV_SIMD_FP16
+        hfloat flt16_min;
+        uint16_t flt16_min_hex = 0x0400;
+        std::memcpy(&flt16_min, &flt16_min_hex, sizeof(hfloat));
+        __test_sincos((hfloat) 1e-3, flt16_min);
+#endif
+        return *this;
+    }
+
     TheTest &test_sincos_fp32() {
         __test_sincos(1e-6f, FLT_MIN);
         return *this;
     }
 
     TheTest &test_sincos_fp64() {
+#if CV_SIMD_64F || CV_SIMD_SCALABLE_64F
         __test_sincos(1e-11, DBL_MIN);
+#endif
         return *this;
     }
 };
@@ -2334,6 +2346,7 @@ void test_hal_intrin_float16()
         .test_float_cvt_fp16()
         .test_exp_fp16()
         .test_log_fp16()
+        .test_sincos_fp16()
 #endif
         ;
 #else
