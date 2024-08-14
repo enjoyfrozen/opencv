@@ -419,7 +419,7 @@ namespace CV__SIMD_NAMESPACE {
 //! @}
 #endif
 
-#if !defined(OPENCV_HAL_MATH_HAVE_SIN) || !defined(OPENCV_HAL_MATH_HAVE_COS)
+#if !defined(OPENCV_HAL_MATH_HAVE_SINCOS) || (defined(CV_FORCE_SIMD128_CPP) && CV_SIMD_WIDTH != 16)
 
 //! @name Sine and Cosine
 //! @{
@@ -483,6 +483,20 @@ namespace CV__SIMD_NAMESPACE {
         ysin = v_select(mask_nan, v_nan, ysin);
         ycos = v_select(mask_nan, v_nan, ycos);
     }
+
+    inline v_float16 v_sin(const v_float16 &x)
+    {
+        v_float16 ysin, ycos;
+        v_sincos(x, ysin, ycos);
+        return ysin;
+    }
+
+    inline v_float16 v_cos(const v_float16 &x)
+    {
+        v_float16 ysin, ycos;
+        v_sincos(x, ysin, ycos);
+        return ycos;
+    }
 #endif // CV_SIMD_FP16
 
     inline void v_sincos(const v_float32 &x, v_float32 &ysin, v_float32 &ycos)
@@ -544,6 +558,20 @@ namespace CV__SIMD_NAMESPACE {
         v_float32 mask_nan = v_or(mask_inf, v_ne(x, x));
         ysin = v_select(mask_nan, v_nan, ysin);
         ycos = v_select(mask_nan, v_nan, ycos);
+    }
+
+    inline v_float32 v_sin(const v_float32 &x)
+    {
+        v_float32 ysin, ycos;
+        v_sincos(x, ysin, ycos);
+        return ysin;
+    }
+
+    inline v_float32 v_cos(const v_float32 &x)
+    {
+        v_float32 ysin, ycos;
+        v_sincos(x, ysin, ycos);
+        return ycos;
     }
 
 #if CV_SIMD_64F || CV_SIMD_SCALABLE_64F
@@ -618,58 +646,14 @@ namespace CV__SIMD_NAMESPACE {
         ysin = v_select(mask_nan, v_nan, ysin);
         ycos = v_select(mask_nan, v_nan, ycos);
     }
-#endif // CV_SIMD_64F || CV_SIMD_SCALABLE_64F
-//! @}
-#endif // OPENCV_HAL_MATH_HAVE_SIN && OPENCV_HAL_MATH_HAVE_COS
 
-#ifndef OPENCV_HAL_MATH_HAVE_SIN
-#if defined(CV_SIMD_FP16) && CV_SIMD_FP16
-    inline v_float16 v_sin(const v_float16 &x)
-    {
-        v_float16 ysin, ycos;
-        v_sincos(x, ysin, ycos);
-        return ysin;
-    }
-#endif // CV_SIMD_FP16
-
-    inline v_float32 v_sin(const v_float32 &x)
-    {
-        v_float32 ysin, ycos;
-        v_sincos(x, ysin, ycos);
-        return ysin;
-    }
-
-#if CV_SIMD_64F || CV_SIMD_SCALABLE_64F
     inline v_float64 v_sin(const v_float64 &x)
     {
         v_float64 ysin, ycos;
         v_sincos(x, ysin, ycos);
         return ysin;
     }
-#endif // CV_SIMD_64F || CV_SIMD_SCALABLE_64F
 
-#define OPENCV_HAL_MATH_HAVE_SIN 1
-#endif // OPENCV_HAL_MATH_HAVE_SIN
-
-#ifndef OPENCV_HAL_MATH_HAVE_COS
-
-#if defined(CV_SIMD_FP16) && CV_SIMD_FP16
-    inline v_float16 v_cos(const v_float16 &x)
-    {
-        v_float16 ysin, ycos;
-        v_sincos(x, ysin, ycos);
-        return ycos;
-    }
-#endif // CV_SIMD_FP16
-
-    inline v_float32 v_cos(const v_float32 &x)
-    {
-        v_float32 ysin, ycos;
-        v_sincos(x, ysin, ycos);
-        return ycos;
-    }
-
-#if CV_SIMD_64F || CV_SIMD_SCALABLE_64F
     inline v_float64 v_cos(const v_float64 &x)
     {
         v_float64 ysin, ycos;
@@ -677,9 +661,9 @@ namespace CV__SIMD_NAMESPACE {
         return ycos;
     }
 #endif // CV_SIMD_64F || CV_SIMD_SCALABLE_64F
-
-#define OPENCV_HAL_MATH_HAVE_COS 1
-#endif // OPENCV_HAL_MATH_HAVE_COS
+//! @}
+#define OPENCV_HAL_MATH_HAVE_SINCOS 1
+#endif // OPENCV_HAL_MATH_HAVE_SINCOS
 
 /* This implementation is derived from the approximation approach of Error Function (Erf) from PyTorch
    https://github.com/pytorch/pytorch/blob/9c50ecc84b9a6e699a7f058891b889aafbf976c7/aten/src/ATen/cpu/vec/vec512/vec512_float.h#L189-L220

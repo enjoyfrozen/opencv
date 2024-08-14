@@ -1916,7 +1916,7 @@ template<typename R> struct TheTest
         cv::RNG_MT19937 rng;
 
         for (int i = 0; i < testRandNum; i++) {
-            Data<R> dataRand, resSin, resCos;
+            Data<R> dataRand;
             for (int j = 0; j < n; ++j) {
                 if (rng.uniform(0.f, 1.f) <= specialValueProbability) {
                     // Insert a special value
@@ -1929,11 +1929,11 @@ template<typename R> struct TheTest
             }
 
             // Compare with std::sin and std::cos
-            R x = dataRand;
-            resSin = v_sin(x);
-            resCos = v_cos(x);
+            R x = dataRand, s, c;
+            v_sincos(x, s, c);
+            Data<R> resSin = s, resCos = c;
             for (int j = 0; j < n; ++j) {
-                SCOPED_TRACE(cv::format("Random test value: %f", dataRand[j]));
+                SCOPED_TRACE(cv::format("Random test value: %f", (double) dataRand[j]));
                 LaneType std_sin = (LaneType) std::sin(dataRand[j]);
                 LaneType std_cos = (LaneType) std::cos(dataRand[j]);
                 // input NaN, +INF, -INF -> output NaN

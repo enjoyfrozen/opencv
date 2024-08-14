@@ -264,7 +264,7 @@ Most of these operations return only one value.
 ### Other math
 
 - Some frequent operations: @ref v_sqrt, @ref v_invsqrt, @ref v_magnitude, @ref v_sqr_magnitude, @ref v_exp,
-                            @ref v_erf
+                            @ref v_erf, @ref v_sin, @ref v_cos
 - Absolute values: @ref v_abs, @ref v_absdiff, @ref v_absdiffs
 
 ### Conversions
@@ -770,11 +770,35 @@ OPENCV_HAL_IMPL_MATH_FUNC(v_log, std::log, _Tp)
  */
 OPENCV_HAL_IMPL_MATH_FUNC(v_erf, std::erf, _Tp)
 
-// TODO: add implementation detail and documents
+/**
+ * @brief Compute sine \f$ sin(x) \f$ and cosine \f$ cos(x) \f$ of elements at the same time
+ *
+ * Only for floating point types. Core implementation steps:
+ */
+template<typename _Tp, int n>
+inline void v_sincos(const v_reg<_Tp, n>& x, v_reg<_Tp, n>& s, v_reg<_Tp, n>& c)
+{
+    for( int i = 0; i < n; i++ )
+    {
+        s.s[i] = std::sin(x.s[i]);
+        c.s[i] = std::cos(x.s[i]);
+    }
+}
+#define OPENCV_HAL_MATH_HAVE_SINCOS 1
+
+/**
+ * @brief Sine \f$ sin(x) \f$ of elements
+ *
+ * Only for floating point types. Core implementation the same as @ref v_sincos.
+ */
 OPENCV_HAL_IMPL_MATH_FUNC(v_sin, std::sin, _Tp)
-#define OPENCV_HAL_MATH_HAVE_SIN 1
+
+/**
+ * @brief Cosine \f$ cos(x) \f$ of elements
+ *
+ * Only for floating point types. Core implementation the same as @ref v_sincos.
+ */
 OPENCV_HAL_IMPL_MATH_FUNC(v_cos, std::cos, _Tp)
-#define OPENCV_HAL_MATH_HAVE_COS 1
 
 /** @brief Absolute value of elements
 
