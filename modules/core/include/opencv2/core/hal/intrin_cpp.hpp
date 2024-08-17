@@ -774,6 +774,13 @@ OPENCV_HAL_IMPL_MATH_FUNC(v_erf, std::erf, _Tp)
  * @brief Compute sine \f$ sin(x) \f$ and cosine \f$ cos(x) \f$ of elements at the same time
  *
  * Only for floating point types. Core implementation steps:
+ * 1. Input Normalization: Scale the periodicity from 2π to 4 and reduce the angle to the range \f$ [0, \frac{\pi}{4}] \f$ using periodicity and trigonometric identities.
+ * 2. Polynomial Approximation for \f$ sin(x) \f$ and \f$ cos(x) \f$:
+ *   - For float16 and float32, use a Taylor series with 4 terms for sine and 5 terms for cosine.
+ *   - For float64, use a Taylor series with 7 terms for sine and 8 terms for cosine.
+ * 3. Select Results: select and convert the final sine and cosine values for the original input angle.
+ *
+ * @note The precision of the calculation depends on the implementation and the data type of the input vector.
  */
 template<typename _Tp, int n>
 inline void v_sincos(const v_reg<_Tp, n>& x, v_reg<_Tp, n>& s, v_reg<_Tp, n>& c)
