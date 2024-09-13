@@ -1190,7 +1190,6 @@ void cv::ogl::Texture2D::copyTo(OutputArray arr, int ddepth, bool autoRelease) c
                 ogl::Buffer::unbind(ogl::Buffer::PIXEL_PACK_BUFFER);
                 buf.copyTo(arr);
             #endif
-
             break;
         }
 
@@ -1402,6 +1401,80 @@ void cv::ogl::Arrays::bind() const
     }
 
     ogl::Buffer::unbind(ogl::Buffer::ARRAY_BUFFER);
+#endif
+}
+
+cv::ogl::Program::Program()
+{
+#ifndef HAVE_OPENGL
+    throw_no_ogl();
+#else
+    program_ = gl::CreateProgram();
+#endif
+}
+
+void cv::ogl::Program::attachShaders(const std::string& fragment_shader_source, const std::string& vertex_shader_source)
+{
+#ifndef HAVE_OPENGL
+    CV_UNUSED(fragment_shader_source);
+    CV_UNUSED(vertex_shader_source);
+    throw_no_ogl();
+#else
+    GLuint fragment_shader = gl::CreateShader(gl::FRAGMENT_SHADER);
+    GLuint vertex_shader = gl::CreateShader(gl::VERTEX_SHADER);
+    const char* fragment_source = fragment_shader_source.c_str();
+    const char* vertex_source = vertex_shader_source.c_str();
+    gl::ShaderSource(fragment_shader, 1, &fragment_source, NULL);
+    gl::ShaderSource(vertex_shader, 1, &vertex_source, NULL);
+    gl::CompileShader(fragment_shader);
+    gl::CompileShader(vertex_shader);
+    gl::AttachShader(program_, fragment_shader);
+    gl::AttachShader(program_, vertex_shader);
+    gl::LinkProgram(program_);
+    gl::UseProgram(program_);
+#endif
+};
+
+std::string cv::ogl::Program::getDefaultFragmentShader()
+{
+#ifndef HAVE_OPENGL
+    throw_no_ogl();
+#else
+    return
+        "#version 330 core\n"
+        "in vec2 TexCoord;\n"
+        "out vec4 color;\n"
+        "uniform sampler2D ourTexture;\n"
+        "void main() {\n"
+        "   color = texture(ourTexture, TexCoord);\n"
+        "}\n";
+#endif
+}
+
+std::string cv::ogl::Program::getDefaultVertexShader()
+{
+#ifndef HAVE_OPENGL
+    throw_no_ogl();
+#else
+    return
+        "#version 330 core\n"
+        "layout (location = 0) in vec3 position;\n"
+        "layout (location = 1) in vec2 texCoord;\n"
+        "out vec2 TexCoord;\n"
+        "uniform mat4 transform;\n"
+        "void main() {\n"
+        "   gl_Position = transform * vec4(position, 1.0);\n"
+        "   TexCoord = texCoord;\n"
+        "}\n";
+#endif
+}
+
+unsigned int cv::ogl::Program::getProgramId()
+{
+#ifndef HAVE_OPENGL
+    throw_no_ogl();
+#else
+    return program_;
 #endif
 }
 
