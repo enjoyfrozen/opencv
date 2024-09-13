@@ -115,6 +115,55 @@ TEST(Imgcodecs_WebP, encode_decode_with_alpha_webp)
     EXPECT_EQ(512, img_webp_bgr.rows);
 }
 
+TEST(Imgcodecs_WebP, load_save_animation)
+{
+    const string root = cvtest::TS::ptr()->get_data_path();
+    const string filename = root + "readwrite/OpenCV_logo_white.png";
+    Animation l_animation, s_animation;
+
+    Mat image = imread(filename, IMREAD_UNCHANGED);
+    s_animation.frames.push_back(image.clone());
+    Mat roi = image(Rect(0, 170, 164, 47));
+    int timestamp = 100;
+    s_animation.timestamps.push_back(timestamp);
+    s_animation.bgcolor = 0xffffffff;
+    s_animation.loop_count = 0xffff; // MAX_LOOP_COUNT
+
+    for (int i = 0; i < 15; i++)
+    {
+        roi = roi - Scalar(0, 0, 0, 20);
+        s_animation.frames.push_back(image.clone());
+        s_animation.timestamps.push_back(timestamp);
+    }
+
+    string output = cv::tempfile(".webp");
+
+    EXPECT_EQ(true, imwriteanimation(output, s_animation));
+    EXPECT_EQ(true, imreadanimation(output, l_animation));
+
+    // Since the last three images are identical, only one image was inserted as the last frame,
+    // and its duration was calculated by libwebp.
+    size_t expected_frame_count = s_animation.frames.size() - 2;
+    EXPECT_EQ(imcount(output), expected_frame_count);
+    EXPECT_EQ(l_animation.frames.size(), expected_frame_count);
+    EXPECT_EQ(l_animation.bgcolor, s_animation.bgcolor);
+    EXPECT_EQ(l_animation.loop_count, s_animation.loop_count);
+
+    for (size_t i = 1; i < l_animation.frames.size()-1; i++)
+        EXPECT_EQ(s_animation.timestamps[i], l_animation.timestamps[i]);
+
+    EXPECT_EQ(true, imwrite(output, s_animation.frames));
+    vector<Mat> webp_frames;
+    EXPECT_EQ(true, imreadmulti(output, webp_frames));
+    expected_frame_count = 1;
+    EXPECT_EQ(webp_frames.size(), expected_frame_count);
+
+    std::vector<uchar> buf;
+    EXPECT_EQ(true, imencode(".webp", webp_frames, buf));
+    EXPECT_EQ(true, imdecodemulti(buf, IMREAD_COLOR_RGB, webp_frames));
+    EXPECT_EQ(0, remove(output.c_str()));
+}
+
 #endif // HAVE_WEBP
 
 }} // namespace
