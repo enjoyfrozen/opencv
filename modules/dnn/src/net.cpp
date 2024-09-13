@@ -175,8 +175,20 @@ String Net::dump()
 {
     CV_TRACE_FUNCTION();
     CV_Assert(impl);
+    if (impl->mainGraph) {
+        std::stringstream sstrm;
+        dumpToStream(sstrm);
+        return sstrm.str();
+    }
     CV_Assert(!empty());
     return impl->dump(true);
+}
+
+void Net::dumpToStream(std::ostream& strm) const
+{
+    if (impl->mainGraph) {
+        impl->dump(std::cout);
+    }
 }
 
 void Net::dumpToFile(const String& path)
@@ -185,7 +197,11 @@ void Net::dumpToFile(const String& path)
     CV_Assert(impl);
     CV_Assert(!empty());
     std::ofstream file(path.c_str());
-    file << dump();
+    if (impl->mainGraph) {
+        impl->dump(file);
+    } else {
+        file << dump();
+    }
     file.close();
 }
 
@@ -409,6 +425,120 @@ int64 Net::getPerfProfile(std::vector<double>& timings)
     CV_TRACE_FUNCTION();
     CV_Assert(impl);
     return impl->getPerfProfile(timings);
+}
+
+bool Net::isConstArg(Arg arg) const
+{
+    return argKind(arg) == DNN_ARG_CONST;
+}
+
+void Net::checkArg(Arg arg) const
+{
+    CV_Assert(impl);
+    CV_Assert((size_t)arg.idx < impl->args.size());
+}
+
+void Net::checkArgs(const std::vector<Arg>& args) const
+{
+    CV_Assert(impl);
+    for (auto arg: args) {
+        CV_Assert((size_t)arg.idx < impl->args.size());
+    }
+}
+
+const ArgData& Net::argData(Arg arg) const
+{
+    CV_Assert(impl);
+    CV_Assert((size_t)arg.idx < impl->args.size());
+    return impl->args[arg.idx];
+}
+
+const std::string& Net::argName(Arg arg) const { return argData(arg).name; }
+
+ArgKind Net::argKind(Arg arg) const { return argData(arg).kind; }
+
+Mat& Net::argTensor(Arg arg) const {
+    CV_Assert(impl);
+    return impl->argTensor(arg);
+}
+
+Arg Net::getArg(const std::string& name)
+{
+    CV_Assert(impl);
+    return impl->getArg(name);
+}
+
+bool Net::haveArg(const std::string& name) const
+{
+    CV_Assert(impl);
+    return impl->haveArg(name);
+}
+
+Arg Net::newConstArg(const std::string& name, const Mat& m) const
+{
+    CV_Assert(impl);
+    return impl->newConstArg(name, m);
+}
+
+Arg Net::newArg(const std::string& name, ArgKind kind) const
+{
+    CV_Assert(impl);
+    return impl->newArg(name, kind);
+}
+
+Ptr<Graph> Net::getMainGraph() const
+{
+    CV_Assert(impl);
+    return impl->mainGraph;
+}
+
+std::ostream& Net::dumpArg(std::ostream& strm, Arg arg, int indent,
+                           bool comma, bool dump_details) const
+{
+    CV_Assert(impl);
+    return impl->dumpArg(strm, arg, indent, comma, dump_details);
+}
+
+int Net::findDim(const std::string& dimname, bool insert)
+{
+    CV_Assert(impl);
+    return impl->findDim(dimname, insert);
+}
+
+std::ostream& Net::dumpDim(std::ostream& strm, int value) const
+{
+    CV_Assert(impl);
+    return impl->dumpDim(strm, value);
+}
+
+void Net::setTracingMode(TracingMode tracingMode)
+{
+    CV_Assert(impl);
+    impl->tracingMode = tracingMode;
+}
+
+TracingMode Net::getTracingMode() const
+{
+    CV_Assert(impl);
+    return impl->tracingMode;
+}
+
+void Net::setProfilingMode(ProfilingMode profilingMode)
+{
+    CV_Assert(impl);
+    impl->profilingMode = profilingMode;
+}
+
+ProfilingMode Net::getProfilingMode() const
+{
+    CV_Assert(impl);
+    return impl->profilingMode;
+}
+
+ModelFormat Net::getModelFormat() const
+{
+    CV_Assert(impl);
+    return impl->modelFormat;
 }
 
 CV__DNN_INLINE_NS_END
