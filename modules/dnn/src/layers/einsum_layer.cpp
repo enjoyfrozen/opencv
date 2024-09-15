@@ -15,7 +15,7 @@ namespace dnn
 {
 
 static bool IsTransposeReshapeForEinsum(const std::vector<size_t>& perm,
-                                        std::vector<int> input_dims,
+                                        const MatShape& input_dims,
                                         MatShape& new_shape) {
     // As long as the dims with values > 1 stay in the same order, it's a reshape.
     // Example: Shape=(1,1,1024,4096) -> perm=(2,0,3,1).
@@ -59,7 +59,8 @@ static Mat Transpose(
     Mat output;
     MatShape order(permutation.begin(), permutation.end());
 
-    cv::transposeND((reshape ? input_reshaped : input), order, output);
+    std::vector<int> order_(order.begin(), order.end());
+    cv::transposeND((reshape ? input_reshaped : input), order_, output);
     return output;
 }
 
@@ -445,7 +446,6 @@ public:
             if (inputs[i] != einsumInpShapes[i])
                 CV_Error(Error::StsAssert, "Passed input shapes do not match with parsed input shapes!");
         }
-
         outputs.clear();
         outputs.emplace_back(einsumOutDims);
         return true;
@@ -764,6 +764,9 @@ void LayerEinsumImpl::calculateOutputShape()
             subscriptIndicesToOutputIndices[mappedIndex] = outputDimCounter++;
         }
     }
+    if (rhs_eq.empty()) {
+        einsumOutDims = MatShape(0, 0); // handle scalar output case
+    }
 }
 
 void LayerEinsumImpl::validateOutputSubscript()
@@ -1006,9 +1009,9 @@ Mat LayerEinsumImpl::FinalizeOutput(
     const std::vector<int>& subscript_indices_to_output_indices = subscriptIndicesToOutputIndices;
     const auto output_dims = einsumOutDims;
 
-    MatShape output_shape = output_dims;
     const auto output_rank = output_dims.size();
 
+    // MatShape output_shape = output_dims;
     // CV_CheckEQ((int) candidateOutput.dims,  (int) output_shape.size(),
     //           "Einsum op: The candidate output cannot be reshaped into the op's output");
 
@@ -1024,6 +1027,7 @@ Mat LayerEinsumImpl::FinalizeOutput(
     std::vector<size_t> output_permutation;
     output_permutation.resize(output_rank, 0);
     size_t output_iter = 0;
+
 
     for (size_t iter = 0, end = ordered_subscript_indices_in_candidate.size(); iter < end; ++iter)
     {
@@ -1345,6 +1349,7 @@ Mat LayerEinsumImpl::batchwiseMatMul(
     Mat reshapedInput1 = input1;
     Mat reshapedInput2 = input2;
 
+
     Mat output;
     if (batches > 1)
     {
@@ -1373,10 +1378,11 @@ Mat LayerEinsumImpl::batchwiseMatMul(
             reshapedInput2 = input2.reshape(1, 2, shape2);
         }
 
+
         output = Mat(M, N, reshapedInput1.type());
-        if ((shape(reshapedInput1).empty() && shape(reshapedInput2).empty())  ||
-            (shape(reshapedInput1).empty() && !shape(reshapedInput2).empty()) ||
-            (!shape(reshapedInput1).empty() && shape(reshapedInput2).empty()))
+        if ((reshapedInput1.dims == 0 && reshapedInput2.dims == 0)  ||
+            (reshapedInput1.dims == 0 && reshapedInput2.dims != 0) ||
+            (reshapedInput1.dims != 0 && reshapedInput2.dims == 0))
         {
             output = reshapedInput1.mul(reshapedInput2); // fastGemm does not support 0D * 0D multiplication
         } else {

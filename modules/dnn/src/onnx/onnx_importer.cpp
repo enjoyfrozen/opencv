@@ -6,12 +6,12 @@
 // Third party copyrights are property of their respective owners.
 
 #include "../precomp.hpp"
-#include <opencv2/dnn/shape_utils.hpp>
+#include "../net_impl.hpp"
 
+#include <opencv2/dnn/shape_utils.hpp>
 #include <opencv2/dnn/layer_reg.private.hpp>
 
 #include <opencv2/core/utils/fp_control_utils.hpp>
-
 #include <opencv2/core/utils/logger.defines.hpp>
 #undef CV_LOG_STRIP_LEVEL
 #define CV_LOG_STRIP_LEVEL CV_LOG_LEVEL_VERBOSE + 1
@@ -2314,10 +2314,10 @@ void ONNXImporter::parseUnsqueeze(LayerParams& layerParams, const opencv_onnx::N
     int axis = axes.getIntValue(0);
     axis = axis < 0 ? axis + (int)inpShape.size() + 1 : axis;
     CV_Assert(0 <= axis && axis <= inpShape.size());
-    std::vector<int> outShape = inpShape;
+    MatShape outShape = inpShape;
     outShape.insert(outShape.begin() + axis, 1);
     layerParams.type = (depth == CV_8S) ? "ReshapeInt8" : "Reshape";
-    layerParams.set("dim", DictValue::arrayInt(&outShape[0], outShape.size()));
+    layerParams.set("dim", DictValue::arrayInt(&outShape[0], (int)outShape.size()));
     if (hasDynamicShapes)
     {
         std::vector<int> dynamicAxes;
@@ -2328,8 +2328,8 @@ void ONNXImporter::parseUnsqueeze(LayerParams& layerParams, const opencv_onnx::N
         }
         for (int index = 0; index < inpShape.size(); ++index)
             inputIndices.push_back(index);
-        layerParams.set("dynamic_axes", DictValue::arrayInt(dynamicAxes.data(), dynamicAxes.size()));
-        layerParams.set("input_indices", DictValue::arrayInt(inputIndices.data(), inputIndices.size()));
+        layerParams.set("dynamic_axes", DictValue::arrayInt(dynamicAxes.data(), (int)dynamicAxes.size()));
+        layerParams.set("input_indices", DictValue::arrayInt(inputIndices.data(), (int)inputIndices.size()));
     }
     addLayer(layerParams, node_proto);
 }
@@ -2527,10 +2527,11 @@ void ONNXImporter::parseConstantFill(LayerParams& layerParams, const opencv_onnx
     else
         fill_value = layerParams.get("value", 0);
 
-    MatShape inpShape = getIntBlob(node_proto, 0);
-    for (int i = 0; i < inpShape.size(); i++)
+    std::vector<int> inpShape = getIntBlob(node_proto, 0);
+    size_t i, total = inpShape.size();
+    for (i = 0; i < total; i++)
         CV_CheckGT(inpShape[i], 0, "");
-    Mat tensor(inpShape.size(), &inpShape[0], depth, Scalar(fill_value));
+    Mat tensor(inpShape, depth, Scalar(fill_value));
     addConstant(node_proto.output(0), tensor);
 }
 
@@ -3229,7 +3230,7 @@ void ONNXImporter::parseEinsum(LayerParams& layerParams, const opencv_onnx::Node
     for (int j = 0; j < node_proto.input_size(); j++)
     {
         // create Const layer for constants and mark its shape
-        std::vector<int> input_shape;
+        MatShape input_shape;
         if (layer_id.find(node_proto.input(j)) == layer_id.end()) {
             Mat blob = getBlob(node_proto, j);
 
@@ -4061,18 +4062,33 @@ void ONNXImporter::buildDispatchMap_COM_MICROSOFT(int opset_version)
 }
 
 
-Net readNetFromONNX(const String& onnxFile)
+Net readNetFromONNX(const String& onnxFile, bool useNewEngine)
 {
+    if (useNewEngine) {
+        Net net = readNetFromONNX2(onnxFile);
+        if (!net.empty())
+            return net;
+    }
     return detail::readNetDiagnostic<ONNXImporter>(onnxFile.c_str());
 }
 
-Net readNetFromONNX(const char* buffer, size_t sizeBuffer)
+Net readNetFromONNX(const char* buffer, size_t sizeBuffer, bool useNewEngine)
 {
+    if (useNewEngine) {
+        Net net = readNetFromONNX2(buffer, sizeBuffer);
+        if (!net.empty())
+            return net;
+    }
     return detail::readNetDiagnostic<ONNXImporter>(buffer, sizeBuffer);
 }
 
-Net readNetFromONNX(const std::vector<uchar>& buffer)
+Net readNetFromONNX(const std::vector<uchar>& buffer, bool useNewEngine)
 {
+    if (useNewEngine) {
+        Net net = readNetFromONNX2(buffer);
+        if (!net.empty())
+            return net;
+    }
     return readNetFromONNX(reinterpret_cast<const char*>(buffer.data()), buffer.size());
 }
 

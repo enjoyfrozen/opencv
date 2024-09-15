@@ -80,21 +80,16 @@ class BaseConvolutionLayerImpl : public ConvolutionLayer
 public:
     bool fusedWeights, fusedBias;
     std::vector<double> weightsMultipliers;
-#ifdef HAVE_WEBNN
     int groups;
-#endif
+
     BaseConvolutionLayerImpl(const LayerParams &params)
     {
         setParamsFrom(params);
         getConvolutionKernelParams(params, kernel_size, pads_begin, pads_end, strides, dilations,
                                    padMode, adjust_pads, useWinograd);
 
-        numOutput = params.get<int>("num_output");
-        int ngroups = params.get<int>("group", 1);
-#ifdef HAVE_WEBNN
-        groups = ngroups;
-#endif
-        CV_Assert(numOutput % ngroups == 0);
+        numOutput = -1;
+        groups = params.get<int>("group", 1);
 
         if (kernel_size.size() == 2) {
             kernel = Size(kernel_size[1], kernel_size[0]);
@@ -122,10 +117,11 @@ public:
 
         CV_Assert((inputs.size() > outputs.size() && blobs.empty()) ||
                   (!inputs.empty() && (blobs.size() == 1 || blobs.size() == 2)));
-        MatSize weightShape = blobs.empty() ? inputs[1].size : blobs[0].size;
+        MatShape weightShape = blobs.empty() ? inputs[1].shape() : blobs[0].shape();
+        numOutput = weightShape[0];
 
         CV_Assert(inputs[0].dims == outputs[0].dims);
-        if (weightShape.dims() == 3)
+        if (weightShape.dims == 3)
         {
             kernel_size.resize(1, kernel_size[0]);
             strides.resize(1, strides[0]);
@@ -133,7 +129,7 @@ public:
             pads_begin.resize(1, pads_begin[0]);
             pads_end.resize(1, pads_end[0]);
         }
-        CV_Assert(weightShape.dims() == kernel_size.size() + 2);
+        CV_Assert(weightShape.dims == kernel_size.size() + 2);
         for (int i = 0; i < kernel_size.size(); i++) {
             CV_Assert(weightShape[i + 2] == kernel_size[i]);
         }
@@ -338,7 +334,8 @@ public:
         if (padMode.empty())
         {
             for (int i = 0; i < inpShape.size(); i++)
-                outShape.push_back((inpShape[i] + pads_begin[i] + pads_end[i] - dilations[i] * (kernel_size[i] - 1) - 1) / strides[i] + 1);
+                outShape.push_back((inpShape[i] + pads_begin[i] + pads_end[i] -
+                                    dilations[i] * (kernel_size[i] - 1) - 1) / strides[i] + 1);
         }
         else
         {
@@ -351,7 +348,7 @@ public:
                      "be multiple of %d but got %d", weightShape[1], inpCn));
         CV_Assert(ngroups > 0 && inpCn % ngroups == 0 && outCn % ngroups == 0);
 
-        outputs.resize(1, outShape);
+        outputs.resize(1, MatShape(outShape));
 
         return false;
     }
@@ -1329,13 +1326,11 @@ public:
     MatShape computeColRowShape(const MatShape &inpShape, const MatShape &outShape) const CV_OVERRIDE
     {
         int dims = inpShape.size();
-        int inpCn = inpShape[1];
         int inpD = dims == 5 ? inpShape[2] : 1;
         int inpH = inpShape[dims - 2];
         int inpW = inpShape.back();
         int outCn = outShape[1];
-        int ngroups = inpCn / blobs[0].size[0];
-        int outGroupCn = outCn / ngroups;
+        int outGroupCn = outCn / groups;
         int ksize = outGroupCn * std::accumulate(kernel_size.begin(), kernel_size.end(),
                                                  1, std::multiplies<size_t>());
         return shape(ksize, inpD * inpH * inpW);
@@ -1372,10 +1367,15 @@ public:
                          std::vector<MatShape> &outputs,
                          std::vector<MatShape> &internals) const CV_OVERRIDE
     {
-        CV_Assert(!hasBias() || blobs[1].total() == (size_t)numOutput);
+        //CV_Assert(!hasBias() || blobs[1].total() == (size_t)numOutput);
         CV_Assert(inputs.size() != 0);
 
         int outCn = numOutput;
+        if (outCn < 0) {
+            CV_Assert(inputs.size() > 1 || !blobs.empty());
+            MatShape weightShape = blobs.empty() ? inputs[1] : blobs[0].shape();
+            outCn = weightShape[1]*groups;
+        }
         std::vector<int> outShape;
         outShape.push_back(inputs[0][0]);  // batch
         outShape.push_back(outCn);
@@ -1398,18 +1398,29 @@ public:
             CV_Error(Error::StsError, "Unsupported padding mode " + padMode);
 
         CV_Assert(outCn % blobs[0].size[1] == 0);
-        int ngroups = outCn / blobs[0].size[1];
 
         int inpCn = inputs[0][1];
-        CV_Assert(inpCn % ngroups == 0 && outCn % ngroups == 0);
+        CV_Assert(inpCn % groups == 0 && outCn % groups == 0);
         CV_Assert(blobs[0].size[0] == inpCn);
 
-        outputs.resize(1, outShape);
+        outputs.resize(1, MatShape(outShape));
 
-        if (!is1x1())
-            internals.push_back(computeColRowShape(inputs[0], outputs[0]));
+        internals.assign(1,
+            is1x1() ? MatShape() :
+            computeColRowShape(inputs[0], outputs[0]));
 
         return false;
+    }
+
+    void getTypes(const std::vector<MatType> &inputs,
+                  const int requiredOutputs,
+                  const int requiredInternals,
+                  std::vector<MatType> &outputs,
+                  std::vector<MatType> &internals) const CV_OVERRIDE
+    {
+        CV_Assert(inputs.size() > 0);
+        outputs.assign(requiredOutputs, inputs[0]);
+        internals.assign(requiredInternals, CV_32F);
     }
 
     void finalize(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr) CV_OVERRIDE
@@ -1419,6 +1430,11 @@ public:
         std::vector<Mat> inputs, outputs;
         inputs_arr.getMatVector(inputs);
         outputs_arr.getMatVector(outputs);
+
+        CV_Assert(inputs.size() > 1 || !blobs.empty());
+
+        MatShape weightShape = blobs.empty() ? inputs[1].shape() : blobs[0].shape();
+        numOutput = weightShape[1]*groups;
 
         std::vector<int> inpShape;
         std::vector<int> outShape;
@@ -1436,11 +1452,13 @@ public:
         }
 
         weightsMultipliers.assign(numOutput, 1.0);
-        if (weightsMat.empty())
-        {
+
+        if (weightsMat.empty() && !blobs.empty()) {
             transpose(blobs[0].reshape(1, blobs[0].size[0]), weightsMat);
-            biasesMat = hasBias() ? blobs[1].reshape(1, numOutput)
-                                  : Mat::zeros(numOutput, 1, CV_32F);
+        }
+
+        if (biasesMat.empty() && blobs.size() >= 2) {
+            biasesMat = blobs[1].reshape(1, numOutput);
         }
     }
 
@@ -1848,7 +1866,7 @@ public:
         CV_OCL_RUN(IS_DNN_OPENCL_TARGET(preferableTarget),
                    forward_ocl(inputs_arr, outputs_arr, internals_arr));
 
-        if (inputs_arr.depth() == CV_16F)
+        if (inputs_arr.depth(0) == CV_16F)
         {
             forward_fallback(inputs_arr, outputs_arr, internals_arr);
             return;
@@ -1863,18 +1881,35 @@ public:
         int inpCn = inputs[0].size[1];
         bool is1x1flag = is1x1();
         int nstripes = getNumThreads();
+        CV_Assert(outputs.size() == 1);
+        CV_Assert(inputs[0].size[0] == outputs[0].size[0]);
+        CV_Assert(outCn == outputs[0].size[1]);
 
-        if( weightsMat.empty() )
-        {
-            transpose(blobs[0].reshape(1, inpCn), weightsMat);
-            biasesMat = hasBias() ? blobs[1].reshape(1, outCn) : Mat::zeros(outCn, 1, CV_32F);
+        if (weightsMat.empty() || inputs.size() >= 2) {
+            Mat inpWeights = !blobs.empty() ? blobs[0] : inputs[1];
+            transpose(inpWeights.reshape(1, inpCn), weightsMat);
         }
 
-        for (size_t ii = 0; ii < outputs.size(); ii++)
+        if (biasesMat.empty() || inputs.size() >= 3) {
+            Mat inpBias = blobs.size() >= 2 ? blobs[1] : inputs.size() >= 3 ? inputs[2] : Mat();
+            Mat biasesMat_ = !inpBias.empty() ? inpBias.reshape(1, outCn) : Mat::zeros(outCn, 1, CV_32F);
+            biasesMat_.copyTo(biasesMat);
+        }
+
+        /*printf("DeConvolution Input: ");
+        pprint(std::cout, inputs[0], 0, 3, 100, '[');
+        printf("\nDeConvolution Weights: ");
+        pprint(std::cout, weightsMat, 0, 3, 100, '[');
+        printf("\nDeConvolution Bias: ");
+        pprint(std::cout, biasesMat, 0, 3, 100, '[');
+        printf("\n");*/
+
+        CV_Assert(outputs.size() == 1);
+        //for (size_t ii = 0; ii < outputs.size(); ii++)
         {
-            int ngroups = outCn / blobs[0].size[1];
-            int inpGroupCn = inpCn / ngroups;
-            int outGroupCn = blobs[0].size[1];
+            int ii = 0;
+            int inpGroupCn = inpCn / groups;
+            int outGroupCn = outCn / groups;
             const Mat& inp = inputs[ii];
             Mat& out = outputs[ii];
             int numImg = inp.size[0];
@@ -1886,12 +1921,12 @@ public:
 
             for (int n = 0; n < numImg; n++)
             {
-                for (int g = 0; g < ngroups; g++)
+                for (int g = 0; g < groups; g++)
                 {
-                    Mat dstMat = decnBlob.rowRange(_Range((g + n * ngroups) * outGroupCn, outGroupCn));
+                    Mat dstMat = decnBlob.rowRange(_Range((g + n * groups) * outGroupCn, outGroupCn));
                     Mat &colMat = is1x1flag ? dstMat : internals[0];
 
-                    Mat convMat = convBlob.rowRange(_Range((g + n * ngroups) * inpGroupCn, inpGroupCn));
+                    Mat convMat = convBlob.rowRange(_Range((g + n * groups) * inpGroupCn, inpGroupCn));
                     Mat wghtMat = weightsMat.colRange(_Range(g * inpGroupCn, inpGroupCn));
                     Mat curBiasMat = biasesMat.rowRange(_Range(g * outGroupCn, outGroupCn));
 
