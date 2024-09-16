@@ -14,7 +14,7 @@ BaseImageDecoder::BaseImageDecoder()
 {
     m_width = m_height = 0;
     m_type = -1;
-    m_buf_supported = true;
+    m_buf_supported = false;
     m_scale_denom = 1;
     m_use_rgb = false;
     m_frame_count = 1;
@@ -72,7 +72,7 @@ ImageDecoder BaseImageDecoder::newDecoder() const
 BaseImageEncoder::BaseImageEncoder()
 {
     m_buf = 0;
-    m_buf_supported = true;
+    m_buf_supported = false;
 }
 
 bool  BaseImageEncoder::isFormatSupported( int depth ) const
