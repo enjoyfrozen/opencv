@@ -140,7 +140,6 @@ static const size_t kParamMaxFileSize = utils::getConfigurationParameterSizeT(
 static constexpr size_t kAvifSignatureSize = 500;
 
 AvifDecoder::AvifDecoder() {
-  m_buf_supported = true;
   channels_ = 0;
   decoder_ = avifDecoderCreate();
   decoder_->strictFlags = AVIF_STRICT_DISABLED;
@@ -279,7 +278,6 @@ bool AvifDecoder::nextPage() {
 
 AvifEncoder::AvifEncoder() {
   m_description = "AVIF files (*.avif)";
-  m_buf_supported = true;
   encoder_ = avifEncoderCreate();
 }
 

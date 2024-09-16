@@ -1,6 +1,6 @@
 // This file is part of OpenCV project.
-// It is subject to the license terms in the LICENSE file found in the top-level directory
-// of this distribution and at http://opencv.org/license.html.
+// It is subject to the license terms in the LICENSE file found in the top-level
+// directory of this distribution and at http://opencv.org/license.html
 
 #include "precomp.hpp"
 
@@ -54,7 +54,6 @@ SPngDecoder::SPngDecoder()
     m_color_type = 0;
     m_ctx = 0;
     m_f = 0;
-    m_buf_supported = true;
     m_buf_pos = 0;
     m_bit_depth = 0;
 }
@@ -491,7 +490,6 @@ bool SPngDecoder::readData(Mat &img)
 SPngEncoder::SPngEncoder()
 {
     m_description = "Portable Network Graphics files (*.png)";
-    m_buf_supported = true;
 }
 
 SPngEncoder::~SPngEncoder()

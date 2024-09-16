@@ -1,6 +1,6 @@
 // This file is part of OpenCV project.
-// It is subject to the license terms in the LICENSE file found in the top-level directory
-// of this distribution and at http://opencv.org/license.html.
+// It is subject to the license terms in the LICENSE file found in the top-level
+// directory of this distribution and at http://opencv.org/license.html
 //
 // Copyright (C) 2020, Stefan Brüns <stefan.bruens@rwth-aachen.de>
 
@@ -504,7 +504,6 @@ namespace detail {
 Jpeg2KOpjDecoderBase::Jpeg2KOpjDecoderBase(OPJ_CODEC_FORMAT format)
     : format_(format)
 {
-    m_buf_supported = true;
 }
 
 
@@ -685,6 +684,7 @@ ImageDecoder Jpeg2KJ2KOpjDecoder::newDecoder() const
 Jpeg2KOpjEncoder::Jpeg2KOpjEncoder()
 {
     m_description = "JPEG-2000 files (*.jp2)";
+    m_buf_supported = false;
 }
 
 ImageEncoder Jpeg2KOpjEncoder::newEncoder() const
